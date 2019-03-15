@@ -48,17 +48,6 @@ const lunchTimeHours = 1.5
 //每天工作時數
 const dailyWorkHours = 8
 
-//Database 資料庫連線設定結構
-type Database struct {
-	User      string
-	Password  string
-	Host      string
-	Database  string
-	Charset   string
-	ParseTime string
-	Loc       string
-}
-
 //PunchLog 卡鐘檔記錄資料表結構
 type PunchLog struct {
 	ID   int `gorm:"AUTO_INCREMENT"`
