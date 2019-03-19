@@ -69,6 +69,7 @@ type Attendance struct {
 	Identify string
 	Late     bool
 	Early    bool
+	CreateAt time.Time
 }
 
 //connectDB 連結資料庫
@@ -148,7 +149,7 @@ func addAttendance(a *Attendance) {
 func init() {
 	connectDB()
 	//開發時可以取消以下注解
-	//db.DropTable(&PunchLog{}, &PunchList{}, &Attendance{})
+	db.DropTable(&PunchLog{}, &PunchList{}, &Attendance{})
 	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&PunchLog{}, &PunchList{}, &Attendance{})
 }
 
@@ -184,7 +185,8 @@ func processDutyData(duty map[string]string) {
 		if goWork.After(am) {
 			late = true
 		}
-		list := Attendance{Identify: k, Late: late, Early: early}
+		now := time.Now()
+		list := Attendance{Identify: k, Late: late, Early: early, CreateAt: now}
 		addAttendance(&list)
 	}
 }
