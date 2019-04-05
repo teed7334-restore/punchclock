@@ -1,6 +1,13 @@
 # punchclock
 701卡鐘資料匯入程式
 
+## 資料夾結構
+data 卡鐘檔
+database 資料庫Driver檔
+env 系統設定
+models 資料庫存取邏輯
+main.go 主程式
+
 ## 程式運行原理
 本程式會在你的資料庫新增三張表，分別是punch_logs(卡鐘檔記錄資料表), punch_list(卡鐘細項資料表), attendances(出勤記錄表)
 
@@ -13,10 +20,8 @@
 ## 程式操作流程
 1. 將701 Server匯出的卡鐘檔扔到./data底下，您也可以透過修改原始碼變更路徑
 2. 卡鐘檔需以下格式-[日期][時間][門號][卡號][員工編號]，且透過空白做分隔，樣本可參照./data/20190312.txt
-3. 修改main.go換成你連入的MySQL資料庫與帳號密碼
+3. 修改./env/env.go換成你連入的MySQL資料庫與帳號密碼，如果您不是使用[Jorani](https://jorani.org)這套HRM，請將cfg.Env = "production"改成其他任一值
 4. 運行main.go
 
-## Todo
-目前所有程式都寫在一個檔案，之後會找時間將Config、DB、Model、File等檔案拉出來
-
-本程式目前尚無計算曠職功能
+## 其它
+本程式目前有計算曠職功能，但需要搭配[Jorani](https://jorani.org)這套HRM系統一起使用
