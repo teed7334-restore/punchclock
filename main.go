@@ -39,7 +39,7 @@ func getRowData(fileName string) *bufio.Scanner {
 func init() {
 	//如果您要修改本程式碼，可以關閉以下方註解以方便測試
 	//db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
-	//db.Db.DropTable(&model.Holiday{})
+	db.Db.DropTable(&model.Holiday{})
 	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
 }
 
@@ -110,7 +110,7 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 }
 
 //processPunchData 處理卡鐘資料
-func processPunchData() {
+func processPunchData() int {
 	files := getFileList()
 	for _, f := range files {
 		fileName := f.Name()
@@ -145,9 +145,15 @@ func processPunchData() {
 			defer db.Db.Close()
 		}
 	}
+	return 1
 }
 
 func main() {
-	go hook.UpdateHoliday()
-	processPunchData()
+	channel := make(chan int)
+	go func() { channel <- hook.UpdateHoliday() }()
+	go func() { channel <- processPunchData() }()
+	result := <-channel + <-channel
+	if 4 == result {
+		fmt.Println("ok")
+	}
 }

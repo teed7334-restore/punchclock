@@ -37,7 +37,7 @@ func jsonDecode(body []byte) interface{} {
 }
 
 //UpdateHoliday 連上人事行政局處理回傳之休假資料寫入資料表
-func UpdateHoliday() {
+func UpdateHoliday() int {
 	url := "http://data.ntpc.gov.tw/api/v1/rest/datastore/382000000A-000077-002"
 	body := getURL(url)
 	resultObject := jsonDecode(body)
@@ -70,4 +70,5 @@ func UpdateHoliday() {
 			model.AddHoliday(&list)
 		}
 	}
+	return 3
 }
