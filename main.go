@@ -153,7 +153,5 @@ func main() {
 	go func() { channel <- hook.UpdateHoliday() }()
 	go func() { channel <- processPunchData() }()
 	result := <-channel + <-channel
-	if 4 == result {
-		fmt.Println("ok")
-	}
+	fmt.Println(result)
 }
