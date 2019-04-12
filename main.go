@@ -11,6 +11,7 @@ import (
 
 	db "./database"
 	env "./env"
+	hook "./hooks"
 	model "./models"
 )
 
@@ -38,7 +39,8 @@ func getRowData(fileName string) *bufio.Scanner {
 func init() {
 	//如果您要修改本程式碼，可以關閉以下方註解以方便測試
 	//db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
-	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
+	//db.Db.DropTable(&model.Holiday{})
+	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
 }
 
 //combinDutyData 組合上班資料
@@ -107,7 +109,8 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 	}
 }
 
-func main() {
+//processPunchData 處理卡鐘資料
+func processPunchData() {
 	files := getFileList()
 	for _, f := range files {
 		fileName := f.Name()
@@ -139,6 +142,12 @@ func main() {
 			if "production" == cfg.Env { //當使用的HRM系統為Jorani時，才標記未打卡員工
 				markUnClockMember(ids, searchTime, createAt)
 			}
+			defer db.Db.Close()
 		}
 	}
+}
+
+func main() {
+	go hook.UpdateHoliday()
+	processPunchData()
 }
