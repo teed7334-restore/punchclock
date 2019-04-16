@@ -5,6 +5,7 @@
 data 卡鐘檔
 database 資料庫Driver檔
 env 系統設定
+hooks 呼叫第三方API
 models 資料庫存取邏輯
 main.go 主程式
 
@@ -20,8 +21,11 @@ main.go 主程式
 ## 程式操作流程
 1. 將701 Server匯出的卡鐘檔扔到./data底下，您也可以透過修改原始碼變更路徑
 2. 卡鐘檔需以下格式-[日期][時間][門號][卡號][員工編號]，且透過空白做分隔，樣本可參照./data/20190312.txt
-3. 修改./env/env.go換成你連入的MySQL資料庫與帳號密碼，如果您不是使用[Jorani](https://jorani.org)這套HRM，請將cfg.Env = "production"改成其他任一值
-4. 運行main.go
+3. 將./env/env.swp檔名改成env.go
+4. 修改./env/env.go換成你連入的MySQL資料庫與帳號密碼，如果您不是使用[Jorani](https://jorani.org)這套HRM，請將cfg.Env = "production"改成其他任一值
+5. 運行main.go
 
 ## 其它
-本程式目前有計算曠職功能，但需要搭配[Jorani](https://jorani.org)這套HRM系統一起使用
+本程式目前有計算曠職功能，並寄發通知信，但需要搭配[Jorani](https://jorani.org)這套HRM系統一起使用
+
+本程式會自動去抓人事行政局休假日資料，寫到holidays資料表，可供公司內部HRM與ERP做參照

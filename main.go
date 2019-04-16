@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/smtp"
 	"os"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func getRowData(fileName string) *bufio.Scanner {
 
 func init() {
 	//如果您要修改本程式碼，可以關閉以下方註解以方便測試
-	//db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
+	db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
 	db.Db.DropTable(&model.Holiday{})
 	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
 }
@@ -81,7 +82,7 @@ func processDutyData(duty map[string]string, createAt time.Time) {
 }
 
 //markUnClockMember 標記沒打卡員工
-func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time) {
+func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time) map[string]string {
 	identifies := []string{}
 	for k := range ids {
 		identifies = append(identifies, k)
@@ -89,9 +90,11 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 	cmlResult := model.GetClockMemberList(identifies)
 	memberIds := []string{}
 	uncheckList := make(map[int]string)
+	sendCheckList := make(map[string]string)
 	for k := range cmlResult {
 		memberIds = append(memberIds, cmlResult[k].Identifier)
 		uncheckList[cmlResult[k].ID] = cmlResult[k].Identifier
+		sendCheckList[cmlResult[k].Email] = cmlResult[k].Lastname + " " + cmlResult[k].Firstname
 	}
 	lmlResult := model.GetLeaveMemberList(memberIds, searchTime)
 	for k := range lmlResult {
@@ -107,6 +110,23 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 			model.AddAttendance(&list)
 		}
 	}
+	return sendCheckList
+}
+
+//寄發通知郵件
+func sendMail(to []string, subject string, content string) {
+	host := cfg.Mail.Host + ":" + cfg.Mail.Port
+	auth := smtp.PlainAuth("", cfg.Mail.User, cfg.Mail.Password, cfg.Mail.Host)
+	message := []byte(
+		"Subject: " + subject + "\r\n" +
+			"To: " + to[0] + "\r\n" +
+			"From: " + cfg.Mail.User + "\r\n" +
+			"Content-Type: text/plain; charset=UTF-8" + "\r\n" +
+			"\r\n" +
+			content + "\r\n" +
+			"\r\n",
+	)
+	smtp.SendMail(host, auth, cfg.Mail.User, to, message)
 }
 
 //processPunchData 處理卡鐘資料
@@ -136,11 +156,17 @@ func processPunchData() int {
 				model.AddPunchList(&list)
 			}
 			duty := combinDutyData(searchTime)
+			onCheckTime := searchTime
 			searchTime = searchTime + " 00:00:00"
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
 			processDutyData(duty, createAt)
 			if "production" == cfg.Env { //當使用的HRM系統為Jorani時，才標記未打卡員工
-				markUnClockMember(ids, searchTime, createAt)
+				unClockMembers := markUnClockMember(ids, searchTime, createAt)
+				for email, name := range unClockMembers {
+					to := []string{email}
+					message := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
+					sendMail(to, "未打卡通知", message)
+				}
 			}
 			defer db.Db.Close()
 		}
