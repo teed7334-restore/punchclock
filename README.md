@@ -3,10 +3,15 @@
 
 ## 資料夾結構
 data 卡鐘檔
+
 database 資料庫Driver檔
+
 env 系統設定
+
 hooks 呼叫第三方API
+
 models 資料庫存取邏輯
+
 main.go 主程式
 
 ## 程式運行原理
