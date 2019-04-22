@@ -38,10 +38,15 @@ func getRowData(fileName string) *bufio.Scanner {
 }
 
 func init() {
-	//如果您要修改本程式碼，可以關閉以下方註解以方便測試
-	db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
-	db.Db.DropTable(&model.Holiday{})
-	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
+	if db.Db.HasTable(&model.PunchLog{}) && db.Db.HasTable(&model.PunchList{}) && db.Db.HasTable(&model.Attendance{}) && db.Db.HasTable(&model.NoNeedCheckinList{}) {
+		//如果您要修改本程式碼，可以關閉以下方註解以方便測試
+		//db.Db.DropTable(&model.PunchLog{}, &model.PunchList{}, &model.Attendance{})
+		//db.Db.DropTable(&model.NoNeedCheckinList{})
+	}
+	if db.Db.HasTable(&model.Holiday{}) {
+		db.Db.DropTable(&model.Holiday{})
+	}
+	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{}, &model.NoNeedCheckinList{})
 }
 
 //combinDutyData 組合上班資料
@@ -87,16 +92,26 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 	for k := range ids {
 		identifies = append(identifies, k)
 	}
-	cmlResult := model.GetClockMemberList(identifies)
+	cmlResult := model.GetClockMemberList(identifies) //取得需打卡員工列表
 	memberIds := []string{}
 	uncheckList := make(map[int]string)
 	sendCheckList := make(map[string]string)
+	deny := noNeedCheckinList() //取得不用打卡員工列表
 	for k := range cmlResult {
-		memberIds = append(memberIds, cmlResult[k].Identifier)
-		uncheckList[cmlResult[k].ID] = cmlResult[k].Identifier
-		sendCheckList[cmlResult[k].Email] = cmlResult[k].Lastname + " " + cmlResult[k].Firstname
+		id := cmlResult[k].ID
+		email := cmlResult[k].Email
+		lastName := cmlResult[k].Lastname
+		firstName := cmlResult[k].Firstname
+		memberID := cmlResult[k].Identifier
+		_, ok := deny[memberID]
+		if ok { //略過不用打卡名單
+			continue
+		}
+		memberIds = append(memberIds, memberID)
+		uncheckList[id] = memberID
+		sendCheckList[email] = lastName + " " + firstName
 	}
-	lmlResult := model.GetLeaveMemberList(memberIds, searchTime)
+	lmlResult := model.GetLeaveMemberList(memberIds, searchTime) //取得員工請假列表
 	for k := range lmlResult {
 		key := lmlResult[k].Employee
 		_, ok := uncheckList[key]
@@ -111,6 +126,17 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 		}
 	}
 	return sendCheckList
+}
+
+//noNeedCheckinList 不用打卡員工列表
+func noNeedCheckinList() map[string]int {
+	denyList := model.GetNoNeedCheckinList()
+	list := make(map[string]int)
+	for k := range denyList {
+		key := denyList[k].MemberID
+		list[key] = 1
+	}
+	return list
 }
 
 //寄發通知郵件
@@ -131,6 +157,7 @@ func sendMail(to []string, subject string, content string) {
 
 //processPunchData 處理卡鐘資料
 func processPunchData() int {
+	deny := noNeedCheckinList() //取得不用打卡員工列表
 	files := getFileList()
 	for _, f := range files {
 		fileName := f.Name()
@@ -142,6 +169,13 @@ func processPunchData() int {
 			ids := make(map[string]int)
 			for scanner.Scan() { //將文字檔資料寫入資料表
 				item := strings.Split(scanner.Text(), " ")
+				doorNo := item[2]
+				cardNo := item[3]
+				identify := item[4]
+				_, ok := deny[identify]
+				if ok { //略過不用打卡名單
+					continue
+				}
 				y := "20" + item[0][0:2]
 				m := item[0][2:4]
 				d := item[0][4:6]
@@ -151,8 +185,8 @@ func processPunchData() int {
 				searchTime = fmt.Sprintf("%s-%s-%s", y, m, d)
 				checkTime := fmt.Sprintf("%s-%s-%s %s:%s:%s", y, m, d, h, i, s)
 				punchTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
-				list := model.PunchList{PunchTime: punchTime, DoorNo: item[2], CardNo: item[3], Identify: item[4]}
-				ids[item[4]] = 1
+				list := model.PunchList{PunchTime: punchTime, DoorNo: doorNo, CardNo: cardNo, Identify: identify}
+				ids[identify] = 1
 				model.AddPunchList(&list)
 			}
 			duty := combinDutyData(searchTime)
