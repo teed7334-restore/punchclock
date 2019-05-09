@@ -2,6 +2,10 @@
 701卡鐘資料匯入程式
 
 ## 資料夾結構
+base 底層共用Library
+
+beans 用來裝Call API後之ResultObject
+
 data 卡鐘檔
 
 database 資料庫Driver檔
