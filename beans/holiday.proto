@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package beans;
+
+message Holiday {
+    bool Success = 1; //`json:"success,omitempty" xml:"success,omitempty"` 
+    Results Result = 2; //`json:"result,omitempty" xml:"result,omitempty"`
+}
+
+message Results {
+    string ResourceID = 3; //`json:"resource_id,omitempty" xml:"resource_id,omitempty"`
+    int64 Limit = 4; //`json:"limit,omitempty" xml:"limit,omitempty"`
+    int64 Total = 5; //`json:"total,omitempty" xml:"total,omitempty"`
+    repeated Fields Field = 6; //`json:"fields,omitempty" xml:"fields,omitempty"`
+    repeated Records Record = 9; //`json:"records,omitempty" xml:"records,omitempty"`
+}
+
+message Fields {
+    string Type = 7; //`json:"type,omitempty" xml:"type,omitempty"`
+    string ID = 8; //`json:"id,omitempty" xml:"id,omitempty"`
+}
+
+message Records {
+    string Date = 10; //`json:"date,omitempty" xml:"date,omitempty"`
+    string Name = 11; //`json:"name,omitempty" xml:"name,omitempty"`
+    string IsHoliday = 12; //`json:"isHoliday,omitempty" xml:"isHoliday,omitempty"`
+    string HolidayCategory = 13; //`json:"holidayCategory,omitempty" xml:"holidayCategory,omitempty"`
+    string Description = 14; //`json:"description,omitempty" xml:"description,omitempty"`
+}

@@ -155,10 +155,22 @@ func sendMail(to []string, subject string, content string) {
 	smtp.SendMail(host, auth, cfg.Mail.User, to, message)
 }
 
+//getHoliday 取得假日資料
+func getHoliday() map[string]int {
+	list := model.GetHoliday()
+	isHoliday := make(map[string]int)
+	for _, value := range list {
+		key := value.Date.Format(cfg.TimeFormat)
+		isHoliday[key] = value.IsHoliday
+	}
+	return isHoliday
+}
+
 //processPunchData 處理卡鐘資料
 func processPunchData() int {
 	deny := noNeedCheckinList() //取得不用打卡員工列表
 	files := getFileList()
+	isHoliday := getHoliday() //取得不用打卡日期
 	for _, f := range files {
 		fileName := f.Name()
 		list := model.CheckPunchLog(fileName)
@@ -184,6 +196,10 @@ func processPunchData() int {
 				s := "00"
 				searchTime = fmt.Sprintf("%s-%s-%s", y, m, d)
 				checkTime := fmt.Sprintf("%s-%s-%s %s:%s:%s", y, m, d, h, i, s)
+				_, ok = isHoliday[checkTime]
+				if ok { //略過免打卡日期
+					continue
+				}
 				punchTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
 				list := model.PunchList{PunchTime: punchTime, DoorNo: doorNo, CardNo: cardNo, Identify: identify}
 				ids[identify] = 1
@@ -209,9 +225,11 @@ func processPunchData() int {
 }
 
 func main() {
-	channel := make(chan int)
-	go func() { channel <- hook.UpdateHoliday() }()
-	go func() { channel <- processPunchData() }()
-	result := <-channel + <-channel
-	fmt.Println(result)
+	if 3 != hook.UpdateHoliday() {
+		panic("Hook Error")
+	}
+	if 1 != processPunchData() {
+		panic("Punch Data Error")
+	}
+	fmt.Println(1)
 }

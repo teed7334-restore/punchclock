@@ -2,50 +2,28 @@ package hooks
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
+	base "../base"
+	bean "../beans"
 	env "../env"
 	model "../models"
 )
 
 var cfg = env.GetEnv()
 
-//getURL 透過HTTP GET取得網頁資料
-func getURL(url string) []byte {
-	request, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic(err)
-	}
-	client := &http.Client{}
-	result, err := client.Do(request)
-	if err != nil {
-		panic(err)
-	}
-	body, _ := ioutil.ReadAll(result.Body)
-	defer result.Body.Close()
-	return body
-}
-
-//jsonDecode 將網頁回傳之文字資料轉成JSON格式
-func jsonDecode(body []byte) interface{} {
-	var resultObject interface{}
-	json.Unmarshal(body, &resultObject)
-	return resultObject
-}
-
 //UpdateHoliday 連上人事行政局處理回傳之休假資料寫入資料表
 func UpdateHoliday() int {
-	url := "http://data.ntpc.gov.tw/api/v1/rest/datastore/382000000A-000077-002"
-	body := getURL(url)
-	resultObject := jsonDecode(body)
-	success := resultObject.(map[string]interface{})["success"].(bool)
+	url := cfg.API.Holiday
+	body := base.GetURL(url)
+	resultObject := bean.Holiday{}
+	json.Unmarshal(body, &resultObject)
+	success := resultObject.GetSuccess()
 	if success {
-		items := resultObject.(map[string]interface{})["result"].(map[string]interface{})["records"].([]interface{})
+		items := resultObject.GetResult().GetRecord()
 		for _, value := range items {
-			dateSrc := value.(map[string]interface{})["date"].(string)
+			dateSrc := value.GetDate()
 			dateArray := strings.Split(dateSrc, "/")
 			year := dateArray[0]
 			month := dateArray[1]
@@ -58,14 +36,14 @@ func UpdateHoliday() int {
 			}
 			dateSrc = year + "-" + month + "-" + day + " 00:00:00"
 			date, _ := time.ParseInLocation(cfg.TimeFormat, dateSrc, time.Local)
-			name := value.(map[string]interface{})["name"].(string)
-			holiday := value.(map[string]interface{})["isHoliday"].(string)
-			isHoliday := false
+			name := value.GetName()
+			holiday := value.GetIsHoliday()
+			isHoliday := 0
 			if "是" == holiday {
-				isHoliday = true
+				isHoliday = 1
 			}
-			holidayCategory := value.(map[string]interface{})["holidayCategory"].(string)
-			description := value.(map[string]interface{})["description"].(string)
+			holidayCategory := value.GetHolidayCategory()
+			description := value.GetDescription()
 			list := model.Holiday{Date: date, Name: name, IsHoliday: isHoliday, HolidayCategory: holidayCategory, Description: description}
 			model.AddHoliday(&list)
 		}
