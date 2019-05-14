@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"net/smtp"
-	"os"
 	"strings"
 	"time"
 
+	base "./base"
 	db "./database"
 	env "./env"
 	hook "./hooks"
@@ -17,25 +13,6 @@ import (
 )
 
 var cfg = env.GetEnv()
-
-//getFileList 開啟資料夾中檔案列表
-func getFileList() []os.FileInfo {
-	files, err := ioutil.ReadDir(cfg.Path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return files
-}
-
-//getRowData 取得檔案內容
-func getRowData(fileName string) *bufio.Scanner {
-	txt, err := os.Open(cfg.Path + "/" + fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	scanner := bufio.NewScanner(txt)
-	return scanner
-}
 
 func init() {
 	if db.Db.HasTable(&model.PunchLog{}) && db.Db.HasTable(&model.PunchList{}) && db.Db.HasTable(&model.Attendance{}) && db.Db.HasTable(&model.NoNeedCheckinList{}) {
@@ -103,8 +80,7 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 		lastName := cmlResult[k].Lastname
 		firstName := cmlResult[k].Firstname
 		memberID := cmlResult[k].Identifier
-		_, ok := deny[memberID]
-		if ok { //略過不用打卡名單
+		if skipNoNeedCheckinMembers(deny, memberID) {
 			continue
 		}
 		memberIds = append(memberIds, memberID)
@@ -139,22 +115,6 @@ func noNeedCheckinList() map[string]int {
 	return list
 }
 
-//寄發通知郵件
-func sendMail(to []string, subject string, content string) {
-	host := cfg.Mail.Host + ":" + cfg.Mail.Port
-	auth := smtp.PlainAuth("", cfg.Mail.User, cfg.Mail.Password, cfg.Mail.Host)
-	message := []byte(
-		"Subject: " + subject + "\r\n" +
-			"To: " + to[0] + "\r\n" +
-			"From: " + cfg.Mail.User + "\r\n" +
-			"Content-Type: text/plain; charset=UTF-8" + "\r\n" +
-			"\r\n" +
-			content + "\r\n" +
-			"\r\n",
-	)
-	smtp.SendMail(host, auth, cfg.Mail.User, to, message)
-}
-
 //getHoliday 取得假日資料
 func getHoliday() map[string]int {
 	list := model.GetHoliday()
@@ -166,17 +126,56 @@ func getHoliday() map[string]int {
 	return isHoliday
 }
 
+//skipNoNeedCheckinMembers 跳過免打卡人員
+func skipNoNeedCheckinMembers(deny map[string]int, identify string) bool {
+	_, ok := deny[identify]
+	if cfg.Filters.SkipNoNeedCheckinMembers && ok { //略過不用打卡名單
+		return true
+	}
+	return false
+}
+
+//skipNoNeedCheckinDays 跳過免打卡節日
+func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
+	_, ok := isHoliday[checkTime]
+	if cfg.Filters.SkipNoNeedCheckinDays && ok { //略過免打卡日期
+		return true
+	}
+	return false
+}
+
+//checkTodayHavePunchData 檢查今日打卡資料是否齊全
+func checkTodayHavePunchData(isHoliday map[string]int) bool {
+	now := time.Now().Format(cfg.TimeFormat)
+	today := strings.Split(now, " ")[0]
+	checkTime := today + " 00:00:00"
+	dateArr := strings.Split(today, "-")
+	y := dateArr[0]
+	m := dateArr[1]
+	d := dateArr[2]
+	checkFileName := y + m + d + ".txt"
+	haveFile := base.CheckFile(checkFileName)
+	noNeedCheckInDay := skipNoNeedCheckinDays(isHoliday, checkTime)
+	if !noNeedCheckInDay && !haveFile {
+		return false
+	}
+	return true
+}
+
 //processPunchData 處理卡鐘資料
 func processPunchData() int {
-	deny := noNeedCheckinList() //取得不用打卡員工列表
-	files := getFileList()
+	files := base.GetFileList()
 	isHoliday := getHoliday() //取得不用打卡日期
+	havePunchData := checkTodayHavePunchData(isHoliday)
+	if !havePunchData {
+		base.SendMail(cfg.AlertMail, "無有效卡鐘檔通知", "今日沒有可用的卡鐘檔")
+	}
 	for _, f := range files {
 		fileName := f.Name()
 		list := model.CheckPunchLog(fileName)
 		if 0 == len(list) {
 			model.AddPunchLog(fileName)
-			scanner := getRowData(fileName)
+			scanner := base.GetRowData(fileName)
 			searchTime := ""
 			ids := make(map[string]int)
 			for scanner.Scan() { //將文字檔資料寫入資料表
@@ -184,10 +183,6 @@ func processPunchData() int {
 				doorNo := item[2]
 				cardNo := item[3]
 				identify := item[4]
-				_, ok := deny[identify]
-				if ok { //略過不用打卡名單
-					continue
-				}
 				y := "20" + item[0][0:2]
 				m := item[0][2:4]
 				d := item[0][4:6]
@@ -196,10 +191,6 @@ func processPunchData() int {
 				s := "00"
 				searchTime = fmt.Sprintf("%s-%s-%s", y, m, d)
 				checkTime := fmt.Sprintf("%s-%s-%s %s:%s:%s", y, m, d, h, i, s)
-				_, ok = isHoliday[checkTime]
-				if ok { //略過免打卡日期
-					continue
-				}
 				punchTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
 				list := model.PunchList{PunchTime: punchTime, DoorNo: doorNo, CardNo: cardNo, Identify: identify}
 				ids[identify] = 1
@@ -210,12 +201,12 @@ func processPunchData() int {
 			searchTime = searchTime + " 00:00:00"
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
 			processDutyData(duty, createAt)
-			if "production" == cfg.Env { //當使用的HRM系統為Jorani時，才標記未打卡員工
+			if "production" == cfg.Env && !skipNoNeedCheckinDays(isHoliday, searchTime) { //當使用的HRM系統為Jorani時，才標記未打卡員工
 				unClockMembers := markUnClockMember(ids, searchTime, createAt)
 				for email, name := range unClockMembers {
 					to := []string{email}
 					message := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
-					sendMail(to, "未打卡通知", message)
+					base.SendMail(to, "未打卡通知", message)
 				}
 			}
 			defer db.Db.Close()
