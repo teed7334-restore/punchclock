@@ -80,7 +80,12 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 		lastName := cmlResult[k].Lastname
 		firstName := cmlResult[k].Firstname
 		memberID := cmlResult[k].Identifier
+		dueDate := cmlResult[k].Datehired.Format(cfg.TimeFormat)
 		if skipNoNeedCheckinMembers(deny, memberID) {
+			continue
+		}
+		if skipUnsuccessful(searchTime, dueDate) {
+			fmt.Println(lastName)
 			continue
 		}
 		memberIds = append(memberIds, memberID)
@@ -139,6 +144,16 @@ func skipNoNeedCheckinMembers(deny map[string]int, identify string) bool {
 func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
 	_, ok := isHoliday[checkTime]
 	if cfg.Filters.SkipNoNeedCheckinDays && ok { //略過免打卡日期
+		return true
+	}
+	return false
+}
+
+//skipUnsuccessful 跳過未到職員工
+func skipUnsuccessful(checkTime string, dueDate string) bool {
+	check, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
+	due, _ := time.ParseInLocation(cfg.TimeFormat, dueDate, time.Local)
+	if check.After(due) {
 		return true
 	}
 	return false
