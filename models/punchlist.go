@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //PunchList 卡鐘細項資料表結構

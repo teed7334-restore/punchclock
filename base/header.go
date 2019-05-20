@@ -1,7 +1,7 @@
 package base
 
 import (
-	env "../env"
+	"punchclock/env"
 )
 
 var cfg = env.GetEnv()

@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //Leave 請假記錄

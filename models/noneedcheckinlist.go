@@ -3,7 +3,7 @@ package models
 import (
 	"log"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //NoNeedCheckinList 免打卡人員列表

@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //Holiday 假期資料表

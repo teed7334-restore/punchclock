@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //User 人員資料表

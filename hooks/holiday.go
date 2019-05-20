@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	base "../base"
-	bean "../beans"
-	env "../env"
-	model "../models"
+	"punchclock/base"
+	bean "punchclock/beans"
+	"punchclock/env"
+	model "punchclock/models"
 )
 
 var cfg = env.GetEnv()

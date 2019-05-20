@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //Attendance 出勤記錄表

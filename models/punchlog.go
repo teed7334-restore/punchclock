@@ -3,7 +3,7 @@ package models
 import (
 	"log"
 
-	db "../database"
+	db "punchclock/database"
 )
 
 //PunchLog 卡鐘檔記錄資料表結構

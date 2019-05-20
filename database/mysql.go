@@ -3,7 +3,8 @@ package database
 import (
 	"fmt"
 
-	env "../env"
+	"punchclock/env"
+
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 )

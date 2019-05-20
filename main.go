@@ -5,11 +5,15 @@ import (
 	"strings"
 	"time"
 
-	base "./base"
-	db "./database"
-	env "./env"
-	hook "./hooks"
-	model "./models"
+	"punchclock/base"
+
+	db "punchclock/database"
+
+	"punchclock/env"
+
+	hook "punchclock/hooks"
+
+	model "punchclock/models"
 )
 
 var cfg = env.GetEnv()
