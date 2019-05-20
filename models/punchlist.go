@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 )
 
 //PunchList 卡鐘細項資料表結構

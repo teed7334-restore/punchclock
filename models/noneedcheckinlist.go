@@ -3,7 +3,7 @@ package models
 import (
 	"log"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 )
 
 //NoNeedCheckinList 免打卡人員列表

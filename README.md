@@ -36,6 +36,14 @@ go install $GOPATH/src/github.com/golang/protobuf/protoc-gen-go
 
 最後透過存入的卡鐘細項資料，生成遲到、早退記錄
 
+本系統透過佇列管理員與服務管理員進行發信之動作，如果沒有要使用發信功能者，可以將發信功能自己注解掉
+
+佇列管理員
+https://github.com/teed7334-restore/counter
+
+服務管理員
+https://github.com/teed7334-restore/homekeeper
+
 ## 程式操作流程
 1. 將701 Server匯出的卡鐘檔扔到./data底下，您也可以透過修改原始碼變更路徑
 2. 卡鐘檔需以下格式-[日期][時間][門號][卡號][員工編號]，且透過空白做分隔，樣本可參照./data/20190312.txt

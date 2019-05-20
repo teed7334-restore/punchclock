@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"punchclock/base"
-	bean "punchclock/beans"
-	"punchclock/env"
-	model "punchclock/models"
+	"github.com/teed7334-restore/punchclock/base"
+	bean "github.com/teed7334-restore/punchclock/beans"
+	"github.com/teed7334-restore/punchclock/env"
+	model "github.com/teed7334-restore/punchclock/models"
 )
 
 var cfg = env.GetEnv()

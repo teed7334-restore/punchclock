@@ -3,7 +3,7 @@ package models
 import (
 	"log"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 )
 
 //PunchLog 卡鐘檔記錄資料表結構

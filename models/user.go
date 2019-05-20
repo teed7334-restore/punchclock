@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 )
 
 //User 人員資料表

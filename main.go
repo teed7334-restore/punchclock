@@ -5,15 +5,17 @@ import (
 	"strings"
 	"time"
 
-	"punchclock/base"
+	"github.com/teed7334-restore/punchclock/base"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 
-	"punchclock/env"
+	"github.com/teed7334-restore/punchclock/env"
 
-	hook "punchclock/hooks"
+	hook "github.com/teed7334-restore/punchclock/hooks"
 
-	model "punchclock/models"
+	model "github.com/teed7334-restore/punchclock/models"
+
+	"github.com/teed7334-restore/punchclock/beans"
 )
 
 var cfg = env.GetEnv()
@@ -89,7 +91,6 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 			continue
 		}
 		if skipUnsuccessful(searchTime, dueDate) {
-			fmt.Println(lastName)
 			continue
 		}
 		memberIds = append(memberIds, memberID)
@@ -187,7 +188,12 @@ func processPunchData() int {
 	isHoliday := getHoliday() //取得不用打卡日期
 	havePunchData := checkTodayHavePunchData(isHoliday)
 	if !havePunchData {
-		base.SendMail(cfg.AlertMail, "無有效卡鐘檔通知", "今日沒有可用的卡鐘檔")
+		subject := "無有效卡鐘檔通知"
+		content := "今日沒有可用的卡鐘檔"
+		for _, mail := range cfg.AlertMail {
+			sendMail := &beans.SendMail{To: mail, Subject: subject, Content: content}
+			hook.SendMail(sendMail)
+		}
 	}
 	for _, f := range files {
 		fileName := f.Name()
@@ -223,9 +229,10 @@ func processPunchData() int {
 			if "production" == cfg.Env && !skipNoNeedCheckinDays(isHoliday, searchTime) { //當使用的HRM系統為Jorani時，才標記未打卡員工
 				unClockMembers := markUnClockMember(ids, searchTime, createAt)
 				for email, name := range unClockMembers {
-					to := []string{email}
-					message := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
-					base.SendMail(to, "未打卡通知", message)
+					subject := "未打卡通知"
+					content := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
+					sendMail := &beans.SendMail{To: email, Subject: subject, Content: content}
+					hook.SendMail(sendMail)
 				}
 			}
 			defer db.Db.Close()

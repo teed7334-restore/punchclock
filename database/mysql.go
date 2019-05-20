@@ -3,7 +3,7 @@ package database
 import (
 	"fmt"
 
-	"punchclock/env"
+	"github.com/teed7334-restore/punchclock/env"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"

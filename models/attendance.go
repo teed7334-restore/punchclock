@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	db "punchclock/database"
+	db "github.com/teed7334-restore/punchclock/database"
 )
 
 //Attendance 出勤記錄表
