@@ -31,9 +31,9 @@ type User struct {
 }
 
 //GetClockMemberList 取得沒打卡人員列表
-func GetClockMemberList(identifies []string) []*User {
+func GetClockMemberList(identifies []string, deny []string, searchTime string) []*User {
 	list := []*User{}
-	err := db.Db.Where("identifier NOT IN (?)", identifies).Find(&list).Error
+	err := db.Db.Where("identifier NOT IN (?) AND identifier NOT IN (?) AND datehired < ?", identifies, deny, searchTime).Find(&list).Error
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -6,16 +6,11 @@ import (
 	"time"
 
 	"github.com/teed7334-restore/punchclock/base"
-
-	db "github.com/teed7334-restore/punchclock/database"
-
-	"github.com/teed7334-restore/punchclock/env"
-
-	hook "github.com/teed7334-restore/punchclock/hooks"
-
-	model "github.com/teed7334-restore/punchclock/models"
-
 	"github.com/teed7334-restore/punchclock/beans"
+	db "github.com/teed7334-restore/punchclock/database"
+	"github.com/teed7334-restore/punchclock/env"
+	hook "github.com/teed7334-restore/punchclock/hooks"
+	model "github.com/teed7334-restore/punchclock/models"
 )
 
 var cfg = env.GetEnv()
@@ -48,7 +43,7 @@ func combinDutyData(searchTime string) map[string]string {
 }
 
 //processDutyData 處理上班資料
-func processDutyData(duty map[string]string, createAt time.Time) {
+func processDutyData(duty map[string]string, createAt time.Time, denyList map[string]string) {
 	for k, v := range duty {
 		item := strings.Split(v, ",")
 		goWork, _ := time.ParseInLocation(cfg.TimeFormat, item[0], time.Local)
@@ -58,11 +53,14 @@ func processDutyData(duty map[string]string, createAt time.Time) {
 		workTime := outWork.Sub(goWork).Hours() - cfg.LunchTimeHours
 		late := false
 		early := false
-		if cfg.DailyWorkHours >= workTime {
-			early = true
-		}
-		if goWork.After(am) {
-			late = true
+		_, ok := denyList[k]
+		if !ok { //先排除免打卡人仕
+			if cfg.DailyWorkHours >= workTime { //判斷早退
+				early = true
+			}
+			if goWork.After(am) { //判斷遲到
+				late = true
+			}
 		}
 		list := model.Attendance{Identify: k, Late: late, Early: early, Unchecked: false, CreateAt: createAt}
 		model.AddAttendance(&list)
@@ -70,29 +68,21 @@ func processDutyData(duty map[string]string, createAt time.Time) {
 }
 
 //markUnClockMember 標記沒打卡員工
-func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time) map[string]string {
+func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time, deny []string) map[string]string {
 	identifies := []string{}
 	for k := range ids {
 		identifies = append(identifies, k)
 	}
-	cmlResult := model.GetClockMemberList(identifies) //取得需打卡員工列表
+	cmlResult := model.GetClockMemberList(identifies, deny, searchTime) //取得需打卡員工列表
 	memberIds := []string{}
 	uncheckList := make(map[int]string)
 	sendCheckList := make(map[string]string)
-	deny := noNeedCheckinList() //取得不用打卡員工列表
 	for k := range cmlResult {
 		id := cmlResult[k].ID
 		email := cmlResult[k].Email
 		lastName := cmlResult[k].Lastname
 		firstName := cmlResult[k].Firstname
 		memberID := cmlResult[k].Identifier
-		dueDate := cmlResult[k].Datehired.Format(cfg.TimeFormat)
-		if skipNoNeedCheckinMembers(deny, memberID) {
-			continue
-		}
-		if skipUnsuccessful(searchTime, dueDate) {
-			continue
-		}
 		memberIds = append(memberIds, memberID)
 		uncheckList[id] = memberID
 		sendCheckList[email] = lastName + " " + firstName
@@ -115,12 +105,11 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 }
 
 //noNeedCheckinList 不用打卡員工列表
-func noNeedCheckinList() map[string]int {
+func noNeedCheckinList() []string {
 	denyList := model.GetNoNeedCheckinList()
-	list := make(map[string]int)
-	for k := range denyList {
-		key := denyList[k].MemberID
-		list[key] = 1
+	list := []string{}
+	for _, v := range denyList {
+		list = append(list, v.MemberID)
 	}
 	return list
 }
@@ -136,29 +125,10 @@ func getHoliday() map[string]int {
 	return isHoliday
 }
 
-//skipNoNeedCheckinMembers 跳過免打卡人員
-func skipNoNeedCheckinMembers(deny map[string]int, identify string) bool {
-	_, ok := deny[identify]
-	if cfg.Filters.SkipNoNeedCheckinMembers && ok { //略過不用打卡名單
-		return true
-	}
-	return false
-}
-
 //skipNoNeedCheckinDays 跳過免打卡節日
 func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
 	_, ok := isHoliday[checkTime]
 	if cfg.Filters.SkipNoNeedCheckinDays && ok { //略過免打卡日期
-		return true
-	}
-	return false
-}
-
-//skipUnsuccessful 跳過未到職員工
-func skipUnsuccessful(checkTime string, dueDate string) bool {
-	check, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
-	due, _ := time.ParseInLocation(cfg.TimeFormat, dueDate, time.Local)
-	if check.After(due) {
 		return true
 	}
 	return false
@@ -187,6 +157,15 @@ func processPunchData() int {
 	files := base.GetFileList()
 	isHoliday := getHoliday() //取得不用打卡日期
 	havePunchData := checkTodayHavePunchData(isHoliday)
+	deny := []string{}              //取得不用打卡員工列表
+	denyList := map[string]string{} //不用打卡員工列表List形式
+	if "production" == cfg.Env {    //當使用的HRM系統為Jorani時，才標記未打卡員工
+		deny = noNeedCheckinList()
+		denyList = map[string]string{}
+		for _, v := range deny {
+			denyList[v] = "1"
+		}
+	}
 	if !havePunchData {
 		subject := "無有效卡鐘檔通知"
 		content := "今日沒有可用的卡鐘檔"
@@ -225,9 +204,9 @@ func processPunchData() int {
 			onCheckTime := searchTime
 			searchTime = searchTime + " 00:00:00"
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
-			processDutyData(duty, createAt)
+			processDutyData(duty, createAt, denyList)
 			if "production" == cfg.Env && !skipNoNeedCheckinDays(isHoliday, searchTime) { //當使用的HRM系統為Jorani時，才標記未打卡員工
-				unClockMembers := markUnClockMember(ids, searchTime, createAt)
+				unClockMembers := markUnClockMember(ids, searchTime, createAt, deny)
 				for email, name := range unClockMembers {
 					subject := "未打卡通知"
 					content := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
