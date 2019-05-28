@@ -39,3 +39,13 @@ func GetClockMemberList(identifies []string, deny []string, searchTime string) [
 	}
 	return list
 }
+
+//GetMemberList 取得全部員工列表
+func GetMemberList() []*User {
+	list := []*User{}
+	err := db.Db.Find(&list).Error
+	if err != nil {
+		log.Fatal(err)
+	}
+	return list
+}

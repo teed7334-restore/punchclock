@@ -7,12 +7,14 @@ Package beans is a generated protocol buffer package.
 
 It is generated from these files:
 	holiday.proto
+	sendMail.proto
 
 It has these top-level messages:
 	Holiday
 	Results
 	Fields
 	Records
+	SendMail
 */
 package beans
 

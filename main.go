@@ -14,6 +14,7 @@ import (
 )
 
 var cfg = env.GetEnv()
+var mailLists map[int]string
 
 func init() {
 	if db.Db.HasTable(&model.PunchLog{}) && db.Db.HasTable(&model.PunchList{}) && db.Db.HasTable(&model.Attendance{}) && db.Db.HasTable(&model.NoNeedCheckinList{}) {
@@ -68,22 +69,27 @@ func processDutyData(duty map[string]string, createAt time.Time, denyList map[st
 }
 
 //markUnClockMember 標記沒打卡員工
-func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time, deny []string) map[string]string {
+func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time, deny []string) (map[string]string, map[string]string) {
 	identifies := []string{}
 	for k := range ids {
 		identifies = append(identifies, k)
 	}
 	cmlResult := model.GetClockMemberList(identifies, deny, searchTime) //取得需打卡員工列表
 	memberIds := []string{}
+	managers := make(map[string]string)
 	uncheckList := make(map[int]string)
 	sendCheckList := make(map[string]string)
-	for k := range cmlResult {
-		id := cmlResult[k].ID
-		email := cmlResult[k].Email
-		lastName := cmlResult[k].Lastname
-		firstName := cmlResult[k].Firstname
-		memberID := cmlResult[k].Identifier
+	for _, member := range cmlResult {
+		id := member.ID
+		email := member.Email
+		lastName := member.Lastname
+		firstName := member.Firstname
+		memberID := member.Identifier
+		manager := member.Manager
 		memberIds = append(memberIds, memberID)
+		if member.ID != member.Manager { //當主管不為自己時
+			managers[email] = mailLists[manager]
+		}
 		uncheckList[id] = memberID
 		sendCheckList[email] = lastName + " " + firstName
 	}
@@ -101,7 +107,19 @@ func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time
 			model.AddAttendance(&list)
 		}
 	}
-	return sendCheckList
+	return sendCheckList, managers
+}
+
+//combinMemberListMapping 組合員工資料表
+func combinMemberListMapping() map[int]string {
+	result := model.GetMemberList()
+	list := make(map[int]string)
+	for _, member := range result {
+		key := member.ID
+		value := member.Email
+		list[key] = value
+	}
+	return list
 }
 
 //noNeedCheckinList 不用打卡員工列表
@@ -206,11 +224,16 @@ func processPunchData() int {
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
 			processDutyData(duty, createAt, denyList)
 			if "production" == cfg.Env && !skipNoNeedCheckinDays(isHoliday, searchTime) { //當使用的HRM系統為Jorani時，才標記未打卡員工
-				unClockMembers := markUnClockMember(ids, searchTime, createAt, deny)
+				unClockMembers, managers := markUnClockMember(ids, searchTime, createAt, deny)
 				for email, name := range unClockMembers {
 					subject := "未打卡通知"
 					content := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
-					sendMail := &beans.SendMail{To: email, Subject: subject, Content: content}
+					cc := ""
+					_, ok := managers[email]
+					if ok {
+						cc = managers[email]
+					}
+					sendMail := &beans.SendMail{To: email, Cc: cc, Subject: subject, Content: content}
 					hook.SendMail(sendMail)
 				}
 			}
@@ -221,6 +244,7 @@ func processPunchData() int {
 }
 
 func main() {
+	mailLists = combinMemberListMapping()
 	if 3 != hook.UpdateHoliday() {
 		panic("Hook Error")
 	}
