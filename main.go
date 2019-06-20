@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -137,7 +138,9 @@ func getHoliday() map[string]int {
 	list := model.GetHoliday()
 	isHoliday := make(map[string]int)
 	for _, value := range list {
-		key := value.Date.Format(cfg.TimeFormat)
+		dateStr := value.Date.Format(cfg.TimeFormat)
+		dateArr := strings.Split(dateStr, " ")
+		key := dateArr[0]
 		isHoliday[key] = value.IsHoliday
 	}
 	return isHoliday
@@ -156,7 +159,7 @@ func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
 func checkTodayHavePunchData(isHoliday map[string]int) bool {
 	now := time.Now().Format(cfg.TimeFormat)
 	today := strings.Split(now, " ")[0]
-	checkTime := today + " 00:00:00"
+	checkTime := today
 	dateArr := strings.Split(today, "-")
 	y := dateArr[0]
 	m := dateArr[1]
@@ -168,6 +171,58 @@ func checkTodayHavePunchData(isHoliday map[string]int) bool {
 		return false
 	}
 	return true
+}
+
+//sendMailForWorningCheckinMember 針對打卡有問題員工發送通知信
+func sendMailForWorningCheckinMember() {
+	cfg := env.GetEnv()
+	now := time.Now()
+	nowStr := now.Format(cfg.TimeFormat)
+	nowArr := strings.Split(nowStr, " ")
+	list := model.GetAttendance(now)
+	mailLists = combinMemberListMapping()
+	for _, item := range list {
+		name := item.Firstname
+		onWorkTime := item.OnWorkTime.Format(cfg.TimeFormat)
+		if item.Late {
+			email := item.Email
+			subject := "遲到通知"
+			content := "親愛的 " + name + " 您於今日 " + onWorkTime + " 才到，目前系統還不會將假期也拉過來計算，如果您己有請假，可自動忽略此次訊息"
+			cc := ""
+			_, ok := mailLists[item.Manager]
+			if ok {
+				cc = mailLists[item.Manager]
+			}
+			sendMail := &beans.SendMail{To: email, Cc: cc, Subject: subject, Content: content}
+			hook.SendMail(sendMail)
+		}
+		if item.Early {
+			email := item.Email
+			subject := "早退通知"
+			content := "親愛的 " + name + " 您於今日 " + onWorkTime + " 離開，目前系統還不會將假期也拉過來計算，如果您己有請假，可自動忽略此次訊息"
+			cc := ""
+			_, ok := mailLists[item.Manager]
+			if ok {
+				cc = mailLists[item.Manager]
+			}
+			sendMail := &beans.SendMail{To: email, Cc: cc, Subject: subject, Content: content}
+			hook.SendMail(sendMail)
+		}
+	}
+	list = model.GetNoCheckinMember(now)
+	for _, item := range list {
+		email := item.Email
+		name := item.Firstname
+		subject := "未打卡通知"
+		content := "親愛的 " + name + " :\r\n" + "您於 " + nowArr[0] + " 尚未打卡"
+		cc := ""
+		_, ok := mailLists[item.Manager]
+		if ok {
+			cc = mailLists[item.Manager]
+		}
+		sendMail := &beans.SendMail{To: email, Cc: cc, Subject: subject, Content: content}
+		hook.SendMail(sendMail)
+	}
 }
 
 //processPunchData 處理卡鐘資料
@@ -219,25 +274,9 @@ func processPunchData() int {
 				model.AddPunchList(&list)
 			}
 			duty := combinDutyData(searchTime)
-			onCheckTime := searchTime
 			searchTime = searchTime + " 00:00:00"
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
 			processDutyData(duty, createAt, denyList)
-			if "production" == cfg.Env && !skipNoNeedCheckinDays(isHoliday, searchTime) { //當使用的HRM系統為Jorani時，才標記未打卡員工
-				unClockMembers, managers := markUnClockMember(ids, searchTime, createAt, deny)
-				for email, name := range unClockMembers {
-					subject := "未打卡通知"
-					content := "親愛的 " + name + " :\r\n" + "您於 " + onCheckTime + " 尚未打卡"
-					cc := ""
-					_, ok := managers[email]
-					if ok {
-						cc = managers[email]
-					}
-					sendMail := &beans.SendMail{To: email, Cc: cc, Subject: subject, Content: content}
-					hook.SendMail(sendMail)
-				}
-			}
-			defer db.Db.Close()
 		}
 	}
 	return 1
@@ -246,10 +285,14 @@ func processPunchData() int {
 func main() {
 	mailLists = combinMemberListMapping()
 	if 3 != hook.UpdateHoliday() {
-		panic("Hook Error")
+		log.Fatal("Hook Error")
 	}
 	if 1 != processPunchData() {
-		panic("Punch Data Error")
+		log.Fatal("Punch Data Error")
 	}
+	if "production" == cfg.Env { //當使用的HRM系統為Jorani時，才標記未打卡員工
+		sendMailForWorningCheckinMember()
+	}
+	defer db.Db.Close()
 	fmt.Println(1)
 }

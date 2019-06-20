@@ -28,7 +28,7 @@ func AddHoliday(h *Holiday) {
 //GetHoliday 取得休假日資料
 func GetHoliday() []*Holiday {
 	list := []*Holiday{}
-	err := db.Db.Where("is_holiday = ?", 1).Find(&list).Error
+	err := db.Db.Where("is_holiday = ?", 1).Order("date desc").Find(&list).Error
 	if err != nil {
 		log.Fatal(err)
 	}
