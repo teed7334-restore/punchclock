@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teed7334-restore/homekeeper/beans"
+	homekeeper "github.com/teed7334-restore/homekeeper/controllers"
 	"github.com/teed7334-restore/punchclock/base"
-	"github.com/teed7334-restore/punchclock/beans"
 	db "github.com/teed7334-restore/punchclock/database"
 	"github.com/teed7334-restore/punchclock/env"
 	hook "github.com/teed7334-restore/punchclock/hooks"
@@ -29,86 +30,32 @@ func init() {
 	db.Db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&model.Holiday{}, &model.PunchLog{}, &model.PunchList{}, &model.Attendance{}, &model.NoNeedCheckinList{})
 }
 
-//combinDutyData 組合上班資料
-func combinDutyData(searchTime string) map[string]string {
-	daily := model.GetDailyPunchList(searchTime)
-	duty := make(map[string]string)
-	for _, v := range daily {
-		_, ok := duty[v.Identify]
-		if ok {
-			duty[v.Identify] = duty[v.Identify] + v.PunchTime.Format(cfg.TimeFormat) + ","
-		} else {
-			duty[v.Identify] = v.PunchTime.Format(cfg.TimeFormat) + ","
-		}
-	}
-	return duty
-}
-
 //processDutyData 處理上班資料
-func processDutyData(duty map[string]string, createAt time.Time, denyList map[string]string) {
-	for k, v := range duty {
-		item := strings.Split(v, ",")
-		goWork, _ := time.ParseInLocation(cfg.TimeFormat, item[0], time.Local)
-		outWork, _ := time.ParseInLocation(cfg.TimeFormat, item[len(item)-2], time.Local)
-		item = strings.Split(item[0], " ")
-		am, _ := time.ParseInLocation(cfg.TimeFormat, item[0]+" "+cfg.WorkAt+":00", time.Local)
-		workTime := outWork.Sub(goWork).Hours() - cfg.LunchTimeHours
-		late := false
+func processDutyData(createAt time.Time) {
+	cfg := env.GetEnv()
+	checkinList := model.GetDailyPunchList(createAt)
+	for _, item := range checkinList {
 		early := false
-		_, ok := denyList[k]
-		if !ok { //先排除免打卡人仕
-			if cfg.DailyWorkHours >= workTime { //判斷早退
-				early = true
-			}
-			if goWork.After(am) { //判斷遲到
-				late = true
-			}
+		late := false
+		onWorkTimeStr := item.OnWorkTime.Format(cfg.TimeFormat)
+		onWorkTimeArr := strings.Split(onWorkTimeStr, " ")
+		diffHour, _, _ := homekeeper.CallCalcTime(item.OnWorkTime, item.OffWorkTime)
+		checkTimeStr := onWorkTimeArr[0] + " " + cfg.CheckTime + ":00"
+		checkTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTimeStr, time.Local)
+		if checkTime.Before(item.OnWorkTime) { //遲到
+			late = true
 		}
-		list := model.Attendance{Identify: k, Late: late, Early: early, Unchecked: false, CreateAt: createAt}
+		if cfg.DailyWorkHours > diffHour { //早退
+			early = true
+		}
+		list := model.Attendance{Identify: item.Identify, Late: late, Early: early, Unchecked: false, CreateAt: createAt}
 		model.AddAttendance(&list)
 	}
-}
-
-//markUnClockMember 標記沒打卡員工
-func markUnClockMember(ids map[string]int, searchTime string, createAt time.Time, deny []string) (map[string]string, map[string]string) {
-	identifies := []string{}
-	for k := range ids {
-		identifies = append(identifies, k)
+	noCheckinList := model.GetNoCheckInMember(createAt)
+	for _, item := range noCheckinList { //當日未打卡
+		list := model.Attendance{Identify: item.Identifier, Late: false, Early: false, Unchecked: true, CreateAt: createAt}
+		model.AddAttendance(&list)
 	}
-	cmlResult := model.GetClockMemberList(identifies, deny, searchTime) //取得需打卡員工列表
-	memberIds := []string{}
-	managers := make(map[string]string)
-	uncheckList := make(map[int]string)
-	sendCheckList := make(map[string]string)
-	for _, member := range cmlResult {
-		id := member.ID
-		email := member.Email
-		lastName := member.Lastname
-		firstName := member.Firstname
-		memberID := member.Identifier
-		manager := member.Manager
-		memberIds = append(memberIds, memberID)
-		if member.ID != member.Manager { //當主管不為自己時
-			managers[email] = mailLists[manager]
-		}
-		uncheckList[id] = memberID
-		sendCheckList[email] = lastName + " " + firstName
-	}
-	lmlResult := model.GetLeaveMemberList(memberIds, searchTime) //取得員工請假列表
-	for k := range lmlResult {
-		key := lmlResult[k].Employee
-		_, ok := uncheckList[key]
-		if ok {
-			uncheckList[key] = ""
-		}
-	}
-	for k := range uncheckList {
-		if "" != uncheckList[k] {
-			list := model.Attendance{Identify: uncheckList[k], Late: false, Early: false, Unchecked: true, CreateAt: createAt}
-			model.AddAttendance(&list)
-		}
-	}
-	return sendCheckList, managers
 }
 
 //combinMemberListMapping 組合員工資料表
@@ -184,6 +131,7 @@ func sendMailForWorningCheckinMember() {
 	for _, item := range list {
 		name := item.Firstname
 		onWorkTime := item.OnWorkTime.Format(cfg.TimeFormat)
+		offWorkTime := item.OffWorkTime.Format(cfg.TimeFormat)
 		if item.Late {
 			email := item.Email
 			subject := "遲到通知"
@@ -199,7 +147,7 @@ func sendMailForWorningCheckinMember() {
 		if item.Early {
 			email := item.Email
 			subject := "早退通知"
-			content := "親愛的 " + name + " 您於今日 " + onWorkTime + " 離開，目前系統還不會將假期也拉過來計算，如果您己有請假，可自動忽略此次訊息"
+			content := "親愛的 " + name + " 您於今日 " + offWorkTime + " 離開，目前系統還不會將假期也拉過來計算，如果您己有請假，可自動忽略此次訊息"
 			cc := ""
 			_, ok := mailLists[item.Manager]
 			if ok {
@@ -242,6 +190,7 @@ func processPunchData() int {
 	if !havePunchData {
 		subject := "無有效卡鐘檔通知"
 		content := "今日沒有可用的卡鐘檔"
+		fmt.Println(cfg.AlertMail)
 		for _, mail := range cfg.AlertMail {
 			sendMail := &beans.SendMail{To: mail, Subject: subject, Content: content}
 			hook.SendMail(sendMail)
@@ -273,10 +222,9 @@ func processPunchData() int {
 				ids[identify] = 1
 				model.AddPunchList(&list)
 			}
-			duty := combinDutyData(searchTime)
 			searchTime = searchTime + " 00:00:00"
 			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
-			processDutyData(duty, createAt, denyList)
+			processDutyData(createAt)
 		}
 	}
 	return 1

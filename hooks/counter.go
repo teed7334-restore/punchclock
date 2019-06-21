@@ -3,8 +3,8 @@ package hooks
 import (
 	"encoding/json"
 
+	"github.com/teed7334-restore/homekeeper/beans"
 	"github.com/teed7334-restore/punchclock/base"
-	"github.com/teed7334-restore/punchclock/beans"
 	"github.com/teed7334-restore/punchclock/env"
 )
 

@@ -2,9 +2,11 @@ package models
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	db "github.com/teed7334-restore/punchclock/database"
+	"github.com/teed7334-restore/punchclock/env"
 )
 
 //User 人員資料表
@@ -30,13 +32,35 @@ type User struct {
 	Calendar     string
 }
 
-//GetClockMemberList 取得沒打卡人員列表
-func GetClockMemberList(identifies []string, deny []string, searchTime string) []*User {
+//GetNoCheckInMember 取得未打卡員工列表
+func GetNoCheckInMember(checkTime time.Time) []*User {
+	cfg := env.GetEnv()
+	now := checkTime.Format(cfg.TimeFormat)
+	nowArr := strings.Split(now, " ")
+	begin := nowArr[0] + " 00:00:00"
+	end := nowArr[0] + " 23:59:59"
+	sql := `
+		SELECT 
+			*
+		FROM 
+			users
+		WHERE 
+			identifier NOT IN (
+				SELECT 
+					member_id 
+				FROM 
+					no_need_checkin_lists) AND 
+			identifier NOT IN (
+				SELECT 
+					identify
+				FROM 
+					punch_lists pl
+				WHERE 
+					punch_time >= ? AND 
+					punch_time <= ?)
+	`
 	list := []*User{}
-	err := db.Db.Where("identifier NOT IN (?) AND identifier NOT IN (?) AND datehired < ?", identifies, deny, searchTime).Find(&list).Error
-	if err != nil {
-		log.Fatal(err)
-	}
+	db.Db.Raw(sql, begin, end).Scan(&list)
 	return list
 }
 
