@@ -39,12 +39,13 @@ func processDutyData(createAt time.Time) {
 		late := false
 		onWorkTimeStr := item.OnWorkTime.Format(cfg.TimeFormat)
 		onWorkTimeArr := strings.Split(onWorkTimeStr, " ")
-		diffHour, _, _ := homekeeper.CallCalcTime(item.OnWorkTime, item.OffWorkTime)
+		diffDay, diffHour, _ := homekeeper.CallCalcTime(item.OnWorkTime, item.OffWorkTime)
 		checkTimeStr := onWorkTimeArr[0] + " " + cfg.CheckTime + ":00"
 		checkTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTimeStr, time.Local)
 		if checkTime.Before(item.OnWorkTime) { //遲到
 			late = true
 		}
+		diffHour = diffDay*8 + diffHour
 		if cfg.DailyWorkHours > diffHour { //早退
 			early = true
 		}
@@ -190,7 +191,6 @@ func processPunchData() int {
 	if !havePunchData {
 		subject := "無有效卡鐘檔通知"
 		content := "今日沒有可用的卡鐘檔"
-		fmt.Println(cfg.AlertMail)
 		for _, mail := range cfg.AlertMail {
 			sendMail := &beans.SendMail{To: mail, Subject: subject, Content: content}
 			hook.SendMail(sendMail)
