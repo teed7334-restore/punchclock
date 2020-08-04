@@ -31,7 +31,7 @@ func PostURL(url string, params []byte) {
 	client := &http.Client{}
 	resp, err := client.Do(request)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
 	}
 	defer resp.Body.Close()
 }

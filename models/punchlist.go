@@ -2,11 +2,11 @@ package models
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
 	db "github.com/teed7334-restore/punchclock/database"
-	"github.com/teed7334-restore/punchclock/env"
 )
 
 //PunchList 卡鐘細項資料表結構
@@ -32,14 +32,14 @@ type DailyPunchList struct {
 func AddPunchList(p *PunchList) {
 	err := db.Db.Create(&p).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
 //GetDailyPunchList 取得當天需打卡員工記錄
 func GetDailyPunchList(checkTime time.Time) []*DailyPunchList {
-	cfg := env.GetEnv()
-	now := checkTime.Format(cfg.TimeFormat)
+	timeFormat := os.Getenv("timeFormat")
+	now := checkTime.Format(timeFormat)
 	nowArr := strings.Split(now, " ")
 	begin := nowArr[0] + " 00:00:00"
 	end := nowArr[0] + " 23:59:59"

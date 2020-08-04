@@ -2,11 +2,11 @@ package models
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
 	db "github.com/teed7334-restore/punchclock/database"
-	"github.com/teed7334-restore/punchclock/env"
 )
 
 //User 人員資料表
@@ -34,8 +34,8 @@ type User struct {
 
 //GetNoCheckInMember 取得未打卡員工列表
 func GetNoCheckInMember(checkTime time.Time) []*User {
-	cfg := env.GetEnv()
-	now := checkTime.Format(cfg.TimeFormat)
+	timeFormat := os.Getenv("TimeFormat")
+	now := checkTime.Format(timeFormat)
 	nowArr := strings.Split(now, " ")
 	begin := nowArr[0] + " 00:00:00"
 	end := nowArr[0] + " 23:59:59"
@@ -69,7 +69,7 @@ func GetMemberList() []*User {
 	list := []*User{}
 	err := db.Db.Find(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }

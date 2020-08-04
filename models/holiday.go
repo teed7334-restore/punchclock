@@ -21,7 +21,7 @@ type Holiday struct {
 func AddHoliday(h *Holiday) {
 	err := db.Db.Create(&h).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -30,7 +30,21 @@ func GetHoliday() []*Holiday {
 	list := []*Holiday{}
 	err := db.Db.Where("is_holiday = ?", 1).Order("date desc").Find(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
+}
+
+//SetHolidayForNonBusiness 將非企業但人事行政局有設為放假的假別取消
+func SetHolidayForNonBusiness() {
+	sql := `
+		UPDATE 
+			holidays 
+		SET 
+			is_holiday = 0
+		WHERE 
+			name IN ('軍人節', '教師節') AND 
+			holiday_category IN ('特定節日')
+	`
+	db.Db.Exec(sql)
 }

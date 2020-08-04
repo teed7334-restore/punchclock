@@ -3,19 +3,21 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	_ "github.com/jinzhu/gorm/dialects/mysql"
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/teed7334-restore/homekeeper/beans"
 	homekeeper "github.com/teed7334-restore/homekeeper/controllers"
 	"github.com/teed7334-restore/punchclock/base"
 	db "github.com/teed7334-restore/punchclock/database"
-	"github.com/teed7334-restore/punchclock/env"
 	hook "github.com/teed7334-restore/punchclock/hooks"
 	model "github.com/teed7334-restore/punchclock/models"
 )
 
-var cfg = env.GetEnv()
 var mailLists map[int]string
 
 func init() {
@@ -32,21 +34,23 @@ func init() {
 
 //processDutyData 處理上班資料
 func processDutyData(createAt time.Time) {
-	cfg := env.GetEnv()
+	dailyWorkHours, _ := strconv.Atoi(os.Getenv("dailyWorkHours"))
+	timeFormat := os.Getenv("timeFormat")
+	checkTime := os.Getenv("checkTime")
 	checkinList := model.GetDailyPunchList(createAt)
 	for _, item := range checkinList {
 		early := false
 		late := false
-		onWorkTimeStr := item.OnWorkTime.Format(cfg.TimeFormat)
+		onWorkTimeStr := item.OnWorkTime.Format(timeFormat)
 		onWorkTimeArr := strings.Split(onWorkTimeStr, " ")
 		diffDay, diffHour, _ := homekeeper.CallCalcTime(item.OnWorkTime, item.OffWorkTime)
-		checkTimeStr := onWorkTimeArr[0] + " " + cfg.CheckTime + ":00"
-		checkTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTimeStr, time.Local)
+		checkTimeStr := onWorkTimeArr[0] + " " + checkTime + ":00"
+		checkTime, _ := time.ParseInLocation(timeFormat, checkTimeStr, time.Local)
 		if checkTime.Before(item.OnWorkTime) { //遲到
 			late = true
 		}
 		diffHour = diffDay*8 + diffHour
-		if cfg.DailyWorkHours > diffHour { //早退
+		if dailyWorkHours > diffHour { //早退
 			early = true
 		}
 		list := model.Attendance{Identify: item.Identify, Late: late, Early: early, Unchecked: false, CreateAt: createAt}
@@ -84,9 +88,10 @@ func noNeedCheckinList() []string {
 //getHoliday 取得假日資料
 func getHoliday() map[string]int {
 	list := model.GetHoliday()
+	timeFormat := os.Getenv("timeFormat")
 	isHoliday := make(map[string]int)
 	for _, value := range list {
-		dateStr := value.Date.Format(cfg.TimeFormat)
+		dateStr := value.Date.Format(timeFormat)
 		dateArr := strings.Split(dateStr, " ")
 		key := dateArr[0]
 		isHoliday[key] = value.IsHoliday
@@ -97,7 +102,8 @@ func getHoliday() map[string]int {
 //skipNoNeedCheckinDays 跳過免打卡節日
 func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
 	_, ok := isHoliday[checkTime]
-	if cfg.Filters.SkipNoNeedCheckinDays && ok { //略過免打卡日期
+	skipNoNeedCheckinDays := os.Getenv("filters.skipNoNeedCheckinDays")
+	if skipNoNeedCheckinDays == "true" && ok { //略過免打卡日期
 		return true
 	}
 	return false
@@ -105,7 +111,8 @@ func skipNoNeedCheckinDays(isHoliday map[string]int, checkTime string) bool {
 
 //checkTodayHavePunchData 檢查今日打卡資料是否齊全
 func checkTodayHavePunchData(isHoliday map[string]int) bool {
-	now := time.Now().Format(cfg.TimeFormat)
+	timeFormat := os.Getenv("timeFormat")
+	now := time.Now().Format(timeFormat)
 	today := strings.Split(now, " ")[0]
 	checkTime := today
 	dateArr := strings.Split(today, "-")
@@ -123,16 +130,16 @@ func checkTodayHavePunchData(isHoliday map[string]int) bool {
 
 //sendMailForWorningCheckinMember 針對打卡有問題員工發送通知信
 func sendMailForWorningCheckinMember() {
-	cfg := env.GetEnv()
+	timeFormat := os.Getenv("timeFormat")
 	now := time.Now()
-	nowStr := now.Format(cfg.TimeFormat)
+	nowStr := now.Format(timeFormat)
 	nowArr := strings.Split(nowStr, " ")
 	list := model.GetAttendance(now)
 	mailLists = combinMemberListMapping()
 	for _, item := range list {
 		name := item.Firstname
-		onWorkTime := item.OnWorkTime.Format(cfg.TimeFormat)
-		offWorkTime := item.OffWorkTime.Format(cfg.TimeFormat)
+		onWorkTime := item.OnWorkTime.Format(timeFormat)
+		offWorkTime := item.OffWorkTime.Format(timeFormat)
 		if item.Late {
 			email := item.Email
 			subject := "遲到通知"
@@ -174,6 +181,15 @@ func sendMailForWorningCheckinMember() {
 	}
 }
 
+//取得當前日期
+func getNowTime() []string {
+	timeFormat := os.Getenv("timeFormat")
+	now := time.Now()
+	nowStr := now.Format(timeFormat)
+	nowArr := strings.Split(nowStr, " ")
+	return nowArr
+}
+
 //processPunchData 處理卡鐘資料
 func processPunchData() int {
 	files := base.GetFileList()
@@ -181,7 +197,9 @@ func processPunchData() int {
 	havePunchData := checkTodayHavePunchData(isHoliday)
 	deny := []string{}              //取得不用打卡員工列表
 	denyList := map[string]string{} //不用打卡員工列表List形式
-	if "production" == cfg.Env {    //當使用的HRM系統為Jorani時，才標記未打卡員工
+	env := os.Getenv("env")
+	timeFormat := os.Getenv("timeFormat")
+	if "production" == env { //當使用的HRM系統為Jorani時，才標記未打卡員工
 		deny = noNeedCheckinList()
 		denyList = map[string]string{}
 		for _, v := range deny {
@@ -189,9 +207,12 @@ func processPunchData() int {
 		}
 	}
 	if !havePunchData {
-		subject := "無有效卡鐘檔通知"
+		nowArr := getNowTime()
+		subject := nowArr[0] + " 無有效卡鐘檔通知"
 		content := "今日沒有可用的卡鐘檔"
-		for _, mail := range cfg.AlertMail {
+		alertMail := os.Getenv("alertMail")
+		mails := strings.Split(alertMail, ",")
+		for _, mail := range mails {
 			sendMail := &beans.SendMail{To: mail, Subject: subject, Content: content}
 			hook.SendMail(sendMail)
 		}
@@ -217,13 +238,13 @@ func processPunchData() int {
 				s := "00"
 				searchTime = fmt.Sprintf("%s-%s-%s", y, m, d)
 				checkTime := fmt.Sprintf("%s-%s-%s %s:%s:%s", y, m, d, h, i, s)
-				punchTime, _ := time.ParseInLocation(cfg.TimeFormat, checkTime, time.Local)
+				punchTime, _ := time.ParseInLocation(timeFormat, checkTime, time.Local)
 				list := model.PunchList{PunchTime: punchTime, DoorNo: doorNo, CardNo: cardNo, Identify: identify}
 				ids[identify] = 1
 				model.AddPunchList(&list)
 			}
 			searchTime = searchTime + " 00:00:00"
-			createAt, _ := time.ParseInLocation(cfg.TimeFormat, searchTime, time.Local)
+			createAt, _ := time.ParseInLocation(timeFormat, searchTime, time.Local)
 			processDutyData(createAt)
 		}
 	}
@@ -233,12 +254,15 @@ func processPunchData() int {
 func main() {
 	mailLists = combinMemberListMapping()
 	if 3 != hook.UpdateHoliday() {
-		log.Fatal("Hook Error")
+		log.Println("Hook Error")
+		return
 	}
 	if 1 != processPunchData() {
-		log.Fatal("Punch Data Error")
+		log.Println("Punch Data Error")
+		return
 	}
-	if "production" == cfg.Env { //當使用的HRM系統為Jorani時，才標記未打卡員工
+	env := os.Getenv("env")
+	if "production" == env { //當使用的HRM系統為Jorani時，才標記未打卡員工
 		sendMailForWorningCheckinMember()
 	}
 	defer db.Db.Close()

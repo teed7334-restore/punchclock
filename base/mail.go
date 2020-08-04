@@ -2,20 +2,23 @@ package base
 
 import (
 	"net/smtp"
+	"os"
 )
 
 //SendMail 寄發通知郵件
 func SendMail(to []string, subject string, content string) {
-	host := cfg.Mail.Host + ":" + cfg.Mail.Port
-	auth := smtp.PlainAuth("", cfg.Mail.User, cfg.Mail.Password, cfg.Mail.Host)
+	host := os.Getenv("mail.host") + ":" + os.Getenv("mail.port")
+	user := os.Getenv("mail.user")
+	passwd := os.Getenv("mail.password")
+	auth := smtp.PlainAuth("", user, passwd, host)
 	message := []byte(
 		"Subject: " + subject + "\r\n" +
 			"To: " + to[0] + "\r\n" +
-			"From: " + cfg.Mail.User + "\r\n" +
+			"From: " + user + "\r\n" +
 			"Content-Type: text/plain; charset=UTF-8" + "\r\n" +
 			"\r\n" +
 			content + "\r\n" +
 			"\r\n",
 	)
-	smtp.SendMail(host, auth, cfg.Mail.User, to, message)
+	smtp.SendMail(host, auth, user, to, message)
 }

@@ -16,7 +16,7 @@ type PunchLog struct {
 func AddPunchLog(fileName string) {
 	err := db.Db.Create(&PunchLog{Name: fileName}).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -25,7 +25,7 @@ func CheckPunchLog(fileName string) []*PunchLog {
 	list := []*PunchLog{}
 	err := db.Db.Where("name = ?", fileName).Find(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }

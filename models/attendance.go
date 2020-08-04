@@ -2,11 +2,11 @@ package models
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
 	db "github.com/teed7334-restore/punchclock/database"
-	"github.com/teed7334-restore/punchclock/env"
 )
 
 //Attendance 出勤記錄表
@@ -36,15 +36,15 @@ type AttendanceRecord struct {
 func AddAttendance(a *Attendance) {
 	err := db.Db.Create(&a).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
 //GetNoCheckinMember 取得沒打卡員工列表
 func GetNoCheckinMember(now time.Time) []*AttendanceRecord {
-	cfg := env.GetEnv()
 	list := []*AttendanceRecord{}
-	nowStr := now.Format(cfg.TimeFormat)
+	timeFormat := os.Getenv("timeFormat")
+	nowStr := now.Format(timeFormat)
 	nowArr := strings.Split(nowStr, " ")
 	sql := `
 		SELECT 
@@ -80,16 +80,16 @@ func GetNoCheckinMember(now time.Time) []*AttendanceRecord {
 	end := nowArr[0] + " 23:59:59"
 	err := db.Db.Raw(sql, begin, end, begin, end).Scan(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }
 
 //GetAttendance 取得出勤記錄表
 func GetAttendance(now time.Time) []*AttendanceRecord {
-	cfg := env.GetEnv()
 	list := []*AttendanceRecord{}
-	nowStr := now.Format(cfg.TimeFormat)
+	timeFormat := os.Getenv("timeFormat")
+	nowStr := now.Format(timeFormat)
 	nowArr := strings.Split(nowStr, " ")
 	sql := `
 		SELECT 
@@ -125,7 +125,7 @@ func GetAttendance(now time.Time) []*AttendanceRecord {
 	end := nowArr[0] + " 23:59:59"
 	err := db.Db.Raw(sql, begin, end, begin, end).Scan(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }

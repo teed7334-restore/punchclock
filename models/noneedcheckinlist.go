@@ -17,7 +17,7 @@ func GetNoNeedCheckinList() []*NoNeedCheckinList {
 	list := []*NoNeedCheckinList{}
 	err := db.Db.Find(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }

@@ -27,7 +27,7 @@ func GetLeaveMemberList(identifies []string, checkTime string) []*Leave {
 	list := []*Leave{}
 	err := db.Db.Joins("INNER JOIN users ON users.id = leaves.employee").Where("leaves.startdate <= ? AND leaves.enddate >= ?", checkTime, checkTime).Find(&list).Error
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return list
 }
