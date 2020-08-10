@@ -34,7 +34,7 @@ type User struct {
 
 //GetNoCheckInMember 取得未打卡員工列表
 func GetNoCheckInMember(checkTime time.Time) []*User {
-	timeFormat := os.Getenv("TimeFormat")
+	timeFormat := os.Getenv("timeFormat")
 	now := checkTime.Format(timeFormat)
 	nowArr := strings.Split(now, " ")
 	begin := nowArr[0] + " 00:00:00"
